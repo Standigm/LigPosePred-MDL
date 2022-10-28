@@ -163,3 +163,13 @@ cython_debug/
 cache
 cache/
 cache/*
+
+# examples
+examples/5AX9/*
+!examples/5AX9/prep.tar.gz
+!examples/5AX9/5AX9_prep.pdb
+!examples/5AX9/gold_60.sdf
+
+# checkpoints
+checkpoints/*
+!checkpoints/ensemble3.tar.gz
