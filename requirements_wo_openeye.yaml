@@ -1,0 +1,23 @@
+name: mdl
+channels:
+  - pytorch
+  - conda-forge
+  - nvidia
+  - dglteam
+
+dependencies:
+  - python=3.10
+  - numpy
+  - scipy
+  - pytorch 
+  - torchvision 
+  - torchaudio 
+  - cudatoolkit=11.3
+  - scikit-learn
+  - pandas
+  - tqdm
+  - dgl
+  - pip
+  - autopep8
+  - pip:
+    - git+https://github.com/mariogeiger/se3cnn.git
