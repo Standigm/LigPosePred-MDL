@@ -67,7 +67,7 @@ def get_doc(rec_doc, lig_doc, lig_name, lig_label_file=None,
     logging.info(f'{doc_ofile} : doc generated successfully.')
 
 
-def run_steps(lig_doc: str, rec_cf, config: MDLConfig):
+def run_steps(lig_idx:int ,lig_doc: str, rec_cf, config: MDLConfig):
     ''' Control overall flow using the functions of included steps above:
         - Pass docs (strings) to the next steps.
         - Params:
@@ -77,7 +77,8 @@ def run_steps(lig_doc: str, rec_cf, config: MDLConfig):
     lig = next(get_mol(lig_doc, doc_type='sdf'))
     # title_elements = lig.GetTitle().split('|')
     # lig_name = f"{title_elements[0]}_{title_elements[-1]}"
-    lig_name = lig.GetTitle()
+    # lig_name = lig.GetTitle()
+    lig_name = f"ligand_{lig_idx}"
 
     # (1) Assign chemical feature (cf) to rec and pose doc.
     lig_cf = get_chemical_feature(lig, lig_name, None, 'lig')
@@ -98,7 +99,7 @@ def prep(pdb_file: str, sdf_file: str, config: MDLConfig):
         - config: MDLConfing
     '''
     # Load ligands as docs (strings) instead of OEGraphMol for starmap.
-    ligs = [d+'$$$$\n' for d in Path(sdf_file).read_text().split('$$$$\n')[:-1]]
+    lig_docs = [d.strip()+'$$$$\n' for d in Path(sdf_file).read_text().split('$$$$') if d.strip() != '']
 
     # Load receptor as OEGraphMol and convert to cf txt.
     rec = next(get_mol(pdb_file))
@@ -109,12 +110,12 @@ def prep(pdb_file: str, sdf_file: str, config: MDLConfig):
     num_processes = config.num_processes
     if num_processes > 1:
         pool = Pool(num_processes) if num_processes else Pool()
-        pool.starmap(run_steps, zip(ligs, repeat(rec_cf), repeat(config)))
+        pool.starmap(run_steps, zip(range(len(lig_docs)),lig_docs, repeat(rec_cf), repeat(config)))
         pool.close()
     else:
-        for lig in tqdm(ligs, desc='Prep complex texts'):
-            run_steps(lig, rec_cf, config)
-
+        for lig_idx, lig_doc in enumerate(tqdm(lig_docs, desc='Prep complex texts')):
+            run_steps(lig_idx, lig_doc, rec_cf, config)
+ 
 
 if __name__ == '__main__':
     pass

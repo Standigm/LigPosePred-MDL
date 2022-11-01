@@ -25,7 +25,7 @@ from mdl.prep import prep
 from mdl.voxel_prep import voxel_prep
 from mdl.inference import inference
 
-from typing import Union
+from typing import Union, Iterable
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -65,8 +65,8 @@ def set_random_seed(seed, deterministic=False):
 
 
 def prep_complex_text(pdb_file: str,
-                       sdf_file: str,
-                       config: MDLConfig):
+                      sdf_file: str,
+                      config: MDLConfig):
     ''' Generate complex texts. complexts contains coordinates with voxel channel index for each point.
         format: x, y, z, channel_idx
     ...
@@ -86,14 +86,14 @@ def prep_complex_text(pdb_file: str,
     print(f'\n>>> Complex texts generated in {data_dir}')
 
 
-def prep_voxel(config: MDLConfig):
+def prep_voxel(binding_site: Iterable, config: MDLConfig):
     ''' Convert complex texts to voxel image in npz format 
     Args:
         - config:  MDLConfig
     '''
     # ## (1-2) Prep pharmacophore 3D voxel tensors (3D images).
     logging.info(f'\n>>> Generate complex voxels in {data_dir}:\n')
-    voxel_prep(config)
+    voxel_prep(binding_site, config)
     print(f'\n>>> Complex voxels generated in {data_dir}')
 
 
@@ -129,15 +129,25 @@ if __name__ == '__main__':
                         'if not set, temporal directory was used.')
     parser.add_argument('-np', '--num_processes', type=int,
                         default=1, help='The number of process for parallel data prep execution')
+    parser.add_argument('-bs', '--binding_site', type=str, default=None,
+                        help='use pre-calculated binding site coordinates. '
+                        'if not provided, ligand center will be used. ex) 53.0,32.1,32.4')
     parser.add_argument('--use_gpu', action='store_true',
                         help='use gpu for inference')
     args = parser.parse_args()
+    # binding site
+    if args.binding_site is not None:
+        args.binding_site = tuple([float(v)
+                                  for v in args.binding_site.split(',')])
+        if len(args.binding_site) != 3:
+            raise ValueError(f"Invalid binding_site. {args.binding_site}")
+
     # Check input files.
     if not Path(args.pdb_file).is_file():
         raise ValueError(f'{args.pdb_file}: File not found.')
     if not Path(args.sdf_file).is_file():
         raise ValueError(f'{args.sdf_file}: File not found.')
-    
+
     # data_dir
     if args.prep_odir:
         os.makedirs(args.prep_odir, exist_ok=True)
@@ -161,7 +171,7 @@ if __name__ == '__main__':
     if not config.seed:
         config.seed = 1992  # np.random.randint(100000)
         set_random_seed(config.seed)
-    
+
     
     # Define save path.
     Path(osp.dirname(config.output_prefix)).mkdir(parents=True, exist_ok=True)
@@ -181,8 +191,8 @@ if __name__ == '__main__':
         prep_complex_text(args.pdb_file, args.sdf_file, config)
     if len(glob.glob(f"{config.data_dir}/*.npz")) == 0 or \
             (len(glob.glob(f"{config.data_dir}/*.npz")) != len(glob.glob(f"{config.data_dir}/*.txt"))):
-        prep_voxel(config)
-    
+        prep_voxel(args.binding_site, config)
+
     # inference
     mean_score_df = predict_pose(config)
     # print(mean_score_df)

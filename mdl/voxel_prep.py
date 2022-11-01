@@ -17,6 +17,8 @@ from multiprocessing import Pool
 from itertools import repeat
 from scipy.spatial.distance import cdist
 from tqdm import tqdm
+from typing import Iterable
+from mdl.config import MDLConfig
 
 from mdl.prep_utils.voxel import (
     crop_grid,
@@ -90,8 +92,8 @@ def crop_nodes(df_nodes, df_nodes_ref, config):
     return df_nodes.loc[idx_cropped, :]
 
 
-def center_nodes(df_nodes_bs, df_nodes_ps, center=None):
-    if not center:
+def center_nodes_(df_nodes_bs, df_nodes_ps, center=None):
+    if center is None:
         center = df_nodes_ps[['x', 'y', 'z']].mean().values
     df_nodes_bs[['x', 'y', 'z']] -= center
     df_nodes_ps[['x', 'y', 'z']] -= center
@@ -199,11 +201,14 @@ def gen_voxel(df_nodes_bs, df_nodes_ps, labels,
         save_dfield(features, out_file)
 
 
-def run_steps(data_file, config):
+def run_steps(data_file, binding_site, config):
     # Define output file and skip if exists (with not conf.overwrite)
     data_file = Path(data_file)
     cname = data_file.stem
     odir = config.data_dir
+    if binding_site is not None:
+        if not isinstance(binding_site, np.ndarray):
+            binding_site = np.array(binding_site)
 
     if config.save_voxel == 'mer':
         out_file = f'{odir}/{cname}.npz'
@@ -247,13 +252,13 @@ def run_steps(data_file, config):
         for idx in range(num_ps):
             df_nodes_bsx = df_nodes_bs.copy()
             df_nodes_psx = df_nodes_ps.loc[idx]
-            center_nodes(df_nodes_bsx, df_nodes_psx)
+            center_nodes_(df_nodes_bsx, df_nodes_psx, center=binding_site)
             nodes_bs.append(df_nodes_bsx)
             nodes_ps.append(df_nodes_psx)
         df_nodes_bs = pd.concat(nodes_bs, keys=list(range(num_ps)))
         df_nodes_ps = pd.concat(nodes_ps, keys=list(range(num_ps)))
     elif config.norm_type == 'mer':
-        df_nodes_bs, df_nodes_ps = center_nodes(df_nodes_bs, df_nodes_ps)
+        center_nodes_(df_nodes_bs, df_nodes_ps, center=binding_site)
         nodes_bs = []
         for idx in range(num_ps):
             nodes_bs.append(df_nodes_bsx)
@@ -287,7 +292,7 @@ def run_steps(data_file, config):
         return
 
 
-def voxel_prep(config):
+def voxel_prep(binding_site: Iterable, config:MDLConfig):
     ''' Convert bs-lig_pose complex files:
         (1) Generate partially connected edges if not'
         (2) Select interacting bs points around ligands'
@@ -300,11 +305,11 @@ def voxel_prep(config):
     if num_processes > 1:
         random.shuffle(data_files)
         pool = Pool(num_processes)
-        pool.starmap(run_steps, zip(data_files, repeat(config)))
+        pool.starmap(run_steps, zip(data_files, repeat(binding_site) , repeat(config)))
         pool.close()
     else:
         for data_file in tqdm(data_files, desc='Prep voxels'):
-            run_steps(data_file, config)
+            run_steps(data_file, binding_site, config)
 
 
 if __name__ == '__main__':
