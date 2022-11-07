@@ -99,17 +99,17 @@ class Validate():
             # names, scores = ray.get([self.val_each.remote(cp) for cp in checkpoints])
         else:
             names, scores = [], []
-            for idx, cp in enumerate(tqdm(checkpoints, desc='Infer with  ensemble models'), 1):
+            for idx, cp in enumerate(tqdm(checkpoints, desc='Inference the ensemble models'), 1):
                 name, score = self.val_each(cp)
                 names.append(name)
                 scores.append(score)
 
-        score_df = pd.DataFrame({'ligand': names[0]})
+        score_df = pd.DataFrame({'complex': names[0]})
         for idx, score in enumerate(scores, 1):
             score_df.insert(idx, f'score_{idx}', score)
 
         score_df['score'] = score_df.mean(axis=1)
-        mean_score_df = score_df[['ligand', 'score']]
+        mean_score_df = score_df[['complex', 'score']]
 
         return score_df, mean_score_df
 

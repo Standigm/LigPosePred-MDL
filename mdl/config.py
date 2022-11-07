@@ -21,15 +21,11 @@ class MDLConfig():
         # Common (for prep and voxel prep)
         rec_suffix: str = 'pdb',
         lig_suffix: str = 'sdf',
-        overwrite: bool = True,
-        # Prep
-        doc_type: str = 'fixed',  # fixed|flexible
+        overwrite: bool = False,
         # Voxel prep
-        edge_type_bs: int = 1,  # edge type for binding site
-        edge_type_ps: int = 2,  # edge type for ligand
-        edge_type_bp: int = 3,  # edge type for binding site - ligand
         src_idx: int = 1,  # starting index of the nodes of given data
         crop_type: str = 'node',  # node|box
+        crop_mode: str = 'all', # all|sep
         # node: by min dist to all nodes
         # box: by min dist to boundary nodes
         r_int: float = 3.5,  # radius of interaction between rec and lig
@@ -45,13 +41,9 @@ class MDLConfig():
         save_voxel: str = 'mer',  # mer|sep
                            # mer: save fields of the same bs to single file
                            # sep: save fields of the same bs to sperate files
-        gen_edges_bs: str = 'partial',  # partial|full
-        # partial: for nodes without edges only
-                                 # full: for all nodes ignoring given edes
-        no_edges_bp: bool = False,  # Do not generate edges between bs and ps
 
         # Feature params
-        node_feature_size=18,
+        node_feature_size: int=18,
         checkpoints: Iterable[str] = [
             "checkpoints/ensemble3/pos_cls_20-40/cp-49-auc89.tar",
             "checkpoints/ensemble3/pos_cls_30-40/cp-35-auc86.tar",
@@ -73,7 +65,7 @@ class MDLConfig():
         batch_size: int = 256,
         num_workers: int = 4,  # The number of data loader workers
         num_processes: int = 1,  # The number of processes in parallel
-        device: Union[None, torch.DeviceObjType] = None,
+        device: Union[None, str] = None,
 
         # Task and Data
         task: str = 'cls',  # cls|reg
@@ -91,16 +83,13 @@ class MDLConfig():
     ):
         self.data_dir = data_dir
         self.output_prefix = output_prefix
-        
+
         self.rec_suffix = rec_suffix
         self.lig_suffix = lig_suffix
         self.overwrite = overwrite
-        self.doc_type = doc_type
-        self.edge_type_bs = edge_type_bs
-        self.edge_type_ps = edge_type_ps
-        self.edge_type_bp = edge_type_bp
         self.src_idx = src_idx
         self.crop_type = crop_type
+        self.crop_mode = crop_mode
         self.r_int = r_int
         self.num_nn = num_nn
         self.num_nn_bp = num_nn_bp
@@ -112,8 +101,6 @@ class MDLConfig():
         self.dfield_type = dfield_type
         self.dfield_norm_type = dfield_norm_type
         self.save_voxel = save_voxel
-        self.gen_edges_bs = gen_edges_bs
-        self.no_edges_bp = no_edges_bp
         self.node_feature_size = node_feature_size
         self.type_d = type_d
         self.nkd = nkd

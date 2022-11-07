@@ -87,7 +87,7 @@ def prep_complex_text(pdb_file: str,
 
 
 def prep_voxel(binding_site: Iterable, config: MDLConfig):
-    ''' Convert complex texts to voxel image in npz format 
+    ''' Convert complex texts to voxel image in npz format
     Args:
         - config:  MDLConfig
     '''
@@ -132,6 +132,9 @@ if __name__ == '__main__':
     parser.add_argument('-bs', '--binding_site', type=str, default=None,
                         help='use pre-calculated binding site coordinates. '
                         'if not provided, ligand center will be used. ex) 53.0,32.1,32.4')
+    parser.add_argument("--crop_mode", type=str, default='all', choices=['all', 'sep'],
+                        help="crop mode: all: use all given poses in the crop process, "
+                        "sep: use seperate(indivisual) poses in the crop process")
     parser.add_argument('--use_gpu', action='store_true',
                         help='use gpu for inference')
     args = parser.parse_args()
@@ -142,13 +145,7 @@ if __name__ == '__main__':
         if len(args.binding_site) != 3:
             raise ValueError(f"Invalid binding_site. {args.binding_site}")
 
-    # Check input files.
-    if not Path(args.pdb_file).is_file():
-        raise ValueError(f'{args.pdb_file}: File not found.')
-    if not Path(args.sdf_file).is_file():
-        raise ValueError(f'{args.sdf_file}: File not found.')
-
-    # data_dir
+    # Set data directory for voxel generation
     if args.prep_odir:
         os.makedirs(args.prep_odir, exist_ok=True)
         data_dir = args.prep_odir
@@ -156,7 +153,7 @@ if __name__ == '__main__':
         temp_dir = tempfile.TemporaryDirectory()
         data_dir = temp_dir.name
 
-    # set default output_prefix as sdf_file name
+    # Set default output_prefix as sdf_file name
     if args.output_prefix is None:
         args.output_prefix = osp.splitext(args.sdf_file)[0]
 
@@ -165,6 +162,7 @@ if __name__ == '__main__':
         data_dir=data_dir,
         output_prefix=args.output_prefix,
         num_processes=args.num_processes,
+        crop_mode=args.crop_mode,
         device='cuda:0' if args.use_gpu else 'cpu')
 
     # Fix seed for random numbers.
@@ -172,13 +170,12 @@ if __name__ == '__main__':
         config.seed = 1992  # np.random.randint(100000)
         set_random_seed(config.seed)
 
-    
     # Define save path.
     Path(osp.dirname(config.output_prefix)).mkdir(parents=True, exist_ok=True)
-    
 
     # Set logging.
     log_file = f'{config.output_prefix}.log'
+
     init_logger(log_file)
     print(f'\n>>> Start MDL (SE3CNN) pose prediction:'
           f'\n>>> Logs are written in {log_file}.'
@@ -187,10 +184,11 @@ if __name__ == '__main__':
 
     start = time()
     # prep data
-    if len(glob.glob(f"{config.data_dir}/*.txt")) == 0:
+    if len(glob.glob(f"{config.data_dir}/*.txt")) == 0 or config.overwrite:
         prep_complex_text(args.pdb_file, args.sdf_file, config)
     if len(glob.glob(f"{config.data_dir}/*.npz")) == 0 or \
-            (len(glob.glob(f"{config.data_dir}/*.npz")) != len(glob.glob(f"{config.data_dir}/*.txt"))):
+            (len(glob.glob(f"{config.data_dir}/*.npz")) != len(glob.glob(f"{config.data_dir}/*.txt"))) or \
+            config.overwrite:
         prep_voxel(args.binding_site, config)
 
     # inference

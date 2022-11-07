@@ -3,6 +3,7 @@
 # --------------------------------------------------------------------------
 
 import sys
+import os.path as osp
 import logging
 import pandas as pd
 import numpy as np
@@ -13,6 +14,7 @@ from itertools import repeat
 from tqdm import tqdm
 from shutil import copy
 from math import log10
+from typing import Iterable
 
 from mdl.config import MDLConfig
 from mdl.prep_utils.common import get_mol
@@ -27,6 +29,7 @@ pd.set_option('display.float_format', '{:.3f}'.format)
 pd.set_option('display.max_rows', None)
 np.set_printoptions(precision=3, threshold=np.inf)
 
+
 def chem_feat_func(mol_type):
     if mol_type == 'rec':
         chem_feat_fn = assign_rec_chemical_feature
@@ -35,6 +38,7 @@ def chem_feat_func(mol_type):
     else:
         raise ValueError("Invalid mol_type:{mol_type}")
     return chem_feat_fn
+
 
 def get_chemical_feature(mol_file, mol_name, mol_ofile, mol_type, overwrite=False):
     if mol_ofile:
@@ -52,7 +56,7 @@ def get_chemical_feature(mol_file, mol_name, mol_ofile, mol_type, overwrite=Fals
 
 
 def get_doc(rec_doc, lig_doc, lig_name, lig_label_file=None,
-            doc_ofile=None, doc_type='fixed', overwrite=True):
+            doc_ofile=None, overwrite=True):
     if doc_ofile:
         if Path(doc_ofile).exists() and not overwrite:
             print(f'{doc_ofile} already exists!')
@@ -67,56 +71,80 @@ def get_doc(rec_doc, lig_doc, lig_name, lig_label_file=None,
     logging.info(f'{doc_ofile} : doc generated successfully.')
 
 
-def run_steps(lig_idx:int ,lig_doc: str, rec_cf, config: MDLConfig):
+def run_steps(idx: int, rec_name: str, rec_doc: str, lig_name: str, lig_doc: str, config: MDLConfig):
     ''' Control overall flow using the functions of included steps above:
         - Pass docs (strings) to the next steps.
-        - Params:
-            lig: oechem.OEGraphMol
     '''
-    lig_doc = lig_doc.strip()  # Remove empty first line if exists.
+
+    rec_doc = rec_doc.strip()  # Remove empty first line if exists.
+    rec = next(get_mol(rec_doc, doc_type='pdb'))
+
     lig = next(get_mol(lig_doc, doc_type='sdf'))
-    # title_elements = lig.GetTitle().split('|')
-    # lig_name = f"{title_elements[0]}_{title_elements[-1]}"
-    # lig_name = lig.GetTitle()
-    lig_name = f"ligand_{lig_idx}"
 
     # (1) Assign chemical feature (cf) to rec and pose doc.
+    rec_cf = get_chemical_feature(rec, rec_name, None, 'rec')
     lig_cf = get_chemical_feature(lig, lig_name, None, 'lig')
 
-    # (2) Generate doc including rec, affinity of complex, and lig. 
+    # (2) Generate doc including rec, affinity of complex, and lig.
+    complex_name = f"{rec_name}+{lig_name}" if rec_name != lig_name else lig_name
     doc_odir = Path(f'{config.data_dir}').resolve()
     doc_odir.mkdir(parents=True, exist_ok=True)
-    doc_ofile = f'{doc_odir}/{lig_name}.txt'
-    get_doc(rec_cf, lig_cf, lig_name, None,
-            doc_ofile, config.doc_type, config.overwrite)
+    doc_ofile = f'{doc_odir}/{complex_name}.txt'
+    get_doc(rec_cf, lig_cf, complex_name, None,
+            doc_ofile, config.overwrite)
 
 
-def prep(pdb_file: str, sdf_file: str, config: MDLConfig):
+def prep(rec_file: str, lig_file: str, config: MDLConfig):
     ''' Generate rec-lig complex texts with pharmacophore nodes.
         Args:
-        - pdb_file: receptor pdb
-        - sdf_file: sdf including multiple ligands
+        - pdb: string of multiple receptors
+        - sdf: string of multiple ligands
         - config: MDLConfing
     '''
-    # Load ligands as docs (strings) instead of OEGraphMol for starmap.
-    lig_docs = [d.strip()+'$$$$\n' for d in Path(sdf_file).read_text().split('$$$$') if d.strip() != '']
 
-    # Load receptor as OEGraphMol and convert to cf txt.
-    rec = next(get_mol(pdb_file))
-    rec_name = Path(pdb_file).stem
-    rec_cf = get_chemical_feature(rec, rec_name, None, 'rec', config.rec_suffix)
+    # Check input files and generate docs.
+    # pdb, sdf file should be the same name or pdb file contain only single element
+    if not osp.isfile(rec_file):
+        raise ValueError(f"File({rec_file}) not exists")
+    if not osp.isfile(lig_file):
+        raise ValueError(f"File({lig_file}) not exists")
+
+
+    # Get text from ligand and receptor files
+    # ligands
+    lig_docs = [d + '\n$$$$\n' for d in [v for v in Path(lig_file).read_text().split('\n$$$$\n') if v.strip() != '']]
+    lig_names = [osp.splitext(osp.basename(lig_file))[0]
+                        + f'_{idx+1}' if len(lig_docs) > 1 else ''
+                        for idx in range(len(lig_docs))]
+
+    # receptors
+    rec_doc = Path(rec_file).read_text()
+    rec_docs = [
+        d + 'END\n' for d in [v for v in rec_doc.split('END\n') if v.strip() != '']]
+    rec_names = [osp.splitext(osp.basename(rec_file))[0]
+                        + (f'_{idx+1}' if len(rec_docs) > 1 else '')
+                        for idx in range(len(rec_docs))]
+    
+    if len(rec_docs) == len(lig_docs):
+        pass
+    elif len(rec_docs) != len(lig_docs) and len(rec_docs) == 1:
+        # rec file contains only single structure
+        rec_docs = rec_docs * len(lig_names)
+        rec_names = rec_names * len(lig_names)
+    else:
+        raise ValueError("Receptor and lignad files are not paired properly.")
 
     # Run prep steps.
     num_processes = config.num_processes
     if num_processes > 1:
-        pool = Pool(num_processes) if num_processes else Pool()
-        pool.starmap(run_steps, zip(range(len(lig_docs)),lig_docs, repeat(rec_cf), repeat(config)))
-        pool.close()
+        with Pool(num_processes) as pool:
+            pool.starmap(run_steps, zip(range(len(lig_docs)),
+                                        rec_names, rec_docs, lig_names, lig_docs, repeat(config)))
     else:
-        for lig_idx, lig_doc in enumerate(tqdm(lig_docs, desc='Prep complex texts')):
-            run_steps(lig_idx, lig_doc, rec_cf, config)
- 
+        for idx, (rec_name, rec_doc, lig_name, lig_doc) in enumerate(tqdm(zip(rec_names, rec_docs, lig_names, lig_docs),
+                                                                          total=len(lig_docs), desc='Prep complex texts')):
+            run_steps(idx, rec_name, rec_doc, lig_name, lig_doc, config)
+
 
 if __name__ == '__main__':
     pass
-

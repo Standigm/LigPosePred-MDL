@@ -1,8 +1,3 @@
-# --------------------------------------------------------------------------
-# (1) Crop nodes and edges of input mol interacting with binding lig.
-# (2) Generate edges for nodes with no connected edges.
-# --------------------------------------------------------------------------
-
 import sys
 import pandas as pd
 import numpy as np
@@ -38,11 +33,10 @@ DTYPE = 'float16'
 DTYPE_INT = 'int32'
 
 
-def read_features(mol, nodes, edges, conf):
-    ''' Read nodes and edges to dataframes. '''
-    # Define columns for node and edge dataframes
+def read_features(nodes):
+    ''' Read nodes to dataframes. '''
+    # Define columns for node dataframes
     node_columns = ['x', 'y', 'z', 'node_type']
-    edge_columns = ['src', 'dst', 'edge_type']
 
     # Read nodes.
     df_nodes = pd.read_csv(StringIO(nodes), names=node_columns)
@@ -50,19 +44,7 @@ def read_features(mol, nodes, edges, conf):
     # NOTE: indices of df maintained to crop nodes and dist later.
     df_nodes = df_nodes.drop(df_nodes[df_nodes['node_type'] == 0].index)
 
-    # Define edge types according to mol types.
-    edge_type = conf.edge_type_bs if mol == 'bs' else conf.edge_type_ps
-
-    # Read edges.
-    if edges is not None:
-        df_edges = pd.read_csv(StringIO(edges), names=edge_columns)
-        df_edges['edge_type'] = edge_type
-        # Change starting index to 0 for bs and number of bs nodes for ps. 
-        df_edges[['src', 'dst']] -= conf.src_idx
-    else:
-        df_edges = pd.DataFrame(columns=edge_columns)
-
-    return df_nodes, df_edges
+    return df_nodes
 
 
 def crop_nodes(df_nodes, df_nodes_ref, config):
@@ -106,7 +88,7 @@ def check_df(dfs):
     return -1
 
 
-def load_complex(data_file, conf):
+def load_complex(data_file, config):
     ''' Read mols from each binding site (bs) - ligand ps complex file.
         Structure of each complex file (docs):
             (docs are separated by empty lines)
@@ -119,34 +101,27 @@ def load_complex(data_file, conf):
     # Split complex text into bs and ligand ps.
     raw_doc = split(r'\n\t?\n', data_file.read_text().strip())
 
-    # Read bs feature dataframes (nodes and edges).
+    # Read bs feature dataframes 
     raw_nodes_bs = raw_doc[0]
-    raw_edges_bs = raw_doc[1] if conf.node_feature_type == 'atom' else None
-    df_nodes_bs, df_edges_bs = read_features(
-        'bs', raw_nodes_bs, raw_edges_bs, conf
-    )
+    df_nodes_bs = read_features(raw_nodes_bs)
 
-    # Read bs and ps feature dataframes (nodes (and edges)).
-    num_rows = 2 if conf.node_feature_type == 'phar' else 3  # rows for each pose 
+    # Read bs and ps feature dataframes (nodes).
+    num_rows = 2 if config.node_feature_type == 'phar' else 3  # rows for each pose
     idx_label = range(num_rows - 1, len(raw_doc), num_rows)
-    labels, nodes_ps, edges_ps = [], [], []  # all ps for the same bs
+    labels, nodes_ps = [], []  # all ps for the same bs
     for idx in idx_label:
         label = float(raw_doc[idx])
         labels.append(label)
         raw_nodes_psx = raw_doc[idx+1]
-        raw_edges_psx = raw_doc[idx+2] if conf.node_feature_type == 'atom' else None
-        df_nodes_psx, df_edges_psx = read_features(
-            'ps', raw_nodes_psx, raw_edges_psx, conf
-        )
+        df_nodes_psx = read_features(raw_nodes_psx)
         nodes_ps.append(df_nodes_psx)
-        edges_ps.append(df_edges_psx)
 
     if nodes_ps:
         df_nodes_ps = pd.concat(nodes_ps, keys=list(range(len(idx_label))))
-        df_edges_ps = pd.concat(edges_ps, keys=list(range(len(idx_label))))
+
     else:
         df_nodes_ps = pd.DataFrame(columns=df_nodes_bs.columns)
-        df_edges_ps = pd.DataFrame(columns=df_edges_bs.columns)
+
 
     return df_nodes_bs, df_nodes_ps, labels
 
@@ -179,7 +154,7 @@ def gen_voxel(df_nodes_bs, df_nodes_ps, labels,
         # Genrerate dfields.
         dfield_bsx = gen_dfield(
             pfield_bsx, nv, deff, dfield_type, norm_type, ch_type
-        ) 
+        )
         dfield_psx = gen_dfield(
             pfield_psx, nv, deff, dfield_type, norm_type, ch_type
         )
@@ -201,7 +176,7 @@ def gen_voxel(df_nodes_bs, df_nodes_ps, labels,
         save_dfield(features, out_file)
 
 
-def run_steps(data_file, binding_site, config):
+def run_steps(data_file, binding_site, df_nodes_ps_set, config):
     # Define output file and skip if exists (with not conf.overwrite)
     data_file = Path(data_file)
     cname = data_file.stem
@@ -220,32 +195,30 @@ def run_steps(data_file, binding_site, config):
 
     # (1) Load complex dict (of dataframes):
     #   - df_node_bs: dataframe of nodes of bs (binding site)
-    #   - df_edge_bs: dataframe of edges of bs
     #   - df_node_ps: dataframe of nodes of ps (multiple poses)
-    #   - df_edge_ps: dataframe of edges of ps
     #   - labels: list of labels or rms values of ps
     try:
         df_nodes_bs, df_nodes_ps, labels = load_complex(data_file, config)
     except:
-        logging.info(f'>>> {data_file} >> Error: reading node|edge features.')
+        logging.info(f'>>> {data_file} >> Error: reading node features.')
         return
     num_ps = len(labels)
-
 
     # (2) Crop bs nodes interacting (distance < r_int) with ligand ps.
     # * Drop complexes of small bs or small psx.
     th_bs, th_ps = 4, 2
     if config.r_int > 0:
         try:
-            df_nodes_bs = crop_nodes(df_nodes_bs, df_nodes_ps, config)
+            df_nodes_bs = crop_nodes(df_nodes_bs, df_nodes_ps_set, config)
         except:
             logging.info(f'>>> {data_file} >> Error: cropping nodes.')
             return
     if len(df_nodes_bs) <= th_bs or len(df_nodes_ps.loc[0]) <= th_ps:
-        logging.info(f'[{cname}] Error: small binding site or poses after crop.')
+        logging.info(
+            f'[{cname}] Error: small binding site or poses after crop.')
         return
 
-    # (3) Center and crop the coordinates of nodes. 
+    # (3) Center and crop the coordinates of nodes.
     # Ceter coords.
     if config.norm_type == 'sep':
         nodes_bs, nodes_ps = [], []
@@ -286,30 +259,51 @@ def run_steps(data_file, binding_site, config):
     # NOTE: Intermediately generate point fields (pfields).
     try:
         gen_voxel(df_nodes_bs, df_nodes_ps, labels,
-                  num_ps, cname, odir, out_file, config) 
+                  num_ps, cname, odir, out_file, config)
     except:
         print(f'>>> {data_file} >> Error: generating fields.')
         return
 
 
-def voxel_prep(binding_site: Iterable, config:MDLConfig):
+def get_ps_set(data_files, config):
+    nodes_ps = []
+    for data_file in data_files:
+        raw_doc = split(r'\n\t?\n', Path(data_file).read_text().strip())
+        raw_nodes_psx = raw_doc[2]
+        df_nodes_psx = read_features(raw_nodes_psx)
+        nodes_ps.append(df_nodes_psx)
+
+    df_nodes_ps = pd.concat(nodes_ps, keys=list(range(len(nodes_ps))))
+
+    return df_nodes_ps
+
+
+def voxel_prep(binding_site: Iterable, config: MDLConfig):
     ''' Convert bs-lig_pose complex files:
-        (1) Generate partially connected edges if not'
-        (2) Select interacting bs points around ligands'
-        (3) Normalize point xyz
+        (1) Select interacting bs points around ligands'
+        (2) Normalize point xyz
     '''
     # Run prep.
-    data_files = glob(f'{config.data_dir}/*.txt')
+    data_files = sorted(glob(f'{config.data_dir}/*.txt'))
+
+    if config.crop_mode == 'all':
+        # NOTE: Get the set of all ligand poses in the input set.
+        # This is to crop the receptor refering to the set of all poses.
+        df_nodes_ps_sets = repeat(get_ps_set(data_files, config))
+    else:
+        # seperate crop
+        df_nodes_ps_sets = [get_ps_set([data_file], config)
+                            for data_file in data_files]
 
     num_processes = config.num_processes
     if num_processes > 1:
-        random.shuffle(data_files)
-        pool = Pool(num_processes)
-        pool.starmap(run_steps, zip(data_files, repeat(binding_site) , repeat(config)))
-        pool.close()
+        with Pool(num_processes) as pool:
+            pool.starmap(run_steps, zip(data_files, repeat(
+                binding_site), df_nodes_ps_sets, repeat(config)))
     else:
-        for data_file in tqdm(data_files, desc='Prep voxels'):
-            run_steps(data_file, binding_site, config)
+        for data_file, df_nodes_ps_set in tqdm(zip(data_files, df_nodes_ps_sets),
+                                               total=len(data_files), desc='Prep voxels'):
+            run_steps(data_file, binding_site, df_nodes_ps_set, config)
 
 
 if __name__ == '__main__':
