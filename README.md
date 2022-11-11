@@ -4,11 +4,11 @@ The MDL method is an approach to reliably predicting ligand binding poses in non
 
 ## Test Datasets and Results
 
-Testsets are available on [here](https://figshare.com/s/a8debd7e4766837a1656).
+Test sets are available [here](https://figshare.com/s/a8debd7e4766837a1656).
 
 ```
 LigPoseData
-├── DL : Directory for DL model inference
+├── DL : Directory for DL-based method
 │   ├── "target_slim_em_poses.tar.gz" 
 │   │    : Energy-minimized target_slim_poses for DL-based method inference. 
 │   │      (the number of per-receptor poses is five)
@@ -23,7 +23,7 @@ LigPoseData
 │   └── "target_slim_poses_n50_inference.csv" : Raw results from the DL-based method.
 │          (the number of per-receptor poses is 50)
 │
-├── MD : Directory for MD simulation
+├── MD : Directory for MD-based method
 │   ├── "target_ensemble_structures.tar.gz"
 │   │    : An ensemble of receptor structures for each benchmark target 
 |   |      (apo crystal structure + MD snapshots)
