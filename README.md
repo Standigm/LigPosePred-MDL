@@ -4,7 +4,7 @@ The MDL method is an approach to reliably predicting ligand binding poses in non
 
 ## Test Datasets and Results
 
-Testsets are available on [link](#)
+Testsets are available on [here](https://figshare.com/s/a8debd7e4766837a1656).
 
 ```
 LigPoseData
