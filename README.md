@@ -10,11 +10,11 @@ Test sets are available [here](https://figshare.com/s/a8debd7e4766837a1656).
 LigPoseData
 ├── DL : Directory for DL-based method
 │   ├── "target_slim_em_poses.tar.gz" 
-│   │    : Energy-minimized target_slim_poses for DL-based method inference. 
+│   │    : Energy-minimized target_slim_poses for DL-based method. 
 │   │      (the number of per-receptor poses is five)
 │   │   
 │   ├── "target_slim_em_poses_n50.tar.gz" 
-│   │    : Energy-minimized target_slim_poses for DL-based method inference. 
+│   │    : Energy-minimized target_slim_poses for DL-based method. 
 │   │      (the number of per-receptor poses is 50)
 │   │   
 │   ├── "target_slim_poses_inference.csv" : Raw results from the DL-based method.
