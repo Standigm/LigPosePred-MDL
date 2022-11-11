@@ -30,7 +30,7 @@ LigPoseData
 │   │
 │   ├── "target_pdb_structures.tar.gz"
 │   │    : The PDB structures of benchmark apo structures and cognate ligands in the holo structures. 
-│   │      Each cognate ligand was aligned using the traslation and roatiion matrix used upon the structure 
+│   │      Each cognate ligand was aligned using the translation and rotation matrix used upon the structure 
 │   │      alignment between the apo and holo structure.
 │   │
 │   ├── "target_slim_poses.tar.gz"
