@@ -17,10 +17,10 @@ LigPoseData
 │   │    : Energy-minimized target_slim_poses for DL-based method. 
 │   │      (the number of per-receptor poses is 50)
 │   │   
-│   ├── "target_slim_poses_inference.csv" : Raw results from the DL-based method.
+│   ├── "target_slim_poses_inference.csv" : Raw results from DL-based method.
 │   │      (the number of per-receptor poses is five)
 │   │ 
-│   └── "target_slim_poses_n50_inference.csv" : Raw results from the DL-based method.
+│   └── "target_slim_poses_n50_inference.csv" : Raw results from DL-based method.
 │          (the number of per-receptor poses is 50)
 │
 ├── MD : Directory for MD-based method
@@ -42,7 +42,7 @@ LigPoseData
 │   │      (the number of per-receptor poses is 50)
 │   │
 │   └── "target_raw_data_md.csv"
-│        : Raw results from the MD-based method.
+│        : Raw results from MD-based method.
 │        
 ├── "target_slim_poses_rmsd.csv" 
 │        : RMSD of docking poses with respect to the cognate ligands.
